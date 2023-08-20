@@ -3,6 +3,7 @@
 Use node version 18> or install node-fetch.
 
 Create .env file with WEBSOCKET_URL (starting with wss://) variable. You could use free version of quicknode.com for Base endpoint provider.
+Also add Twitter API token to .env file as TWITTER_TOKEN. Free API version should be enough.
 
 `npm install`
 `node index.js`
