@@ -15,9 +15,10 @@ const provider = new ethers.WebSocketProvider(url);
 const contract = new ethers.Contract(contractAddress, contractABI, provider);
 
 contract.on('Trade', async (trader, subject, isBuy, shareAmount, ethAmount, protocolEthAmount, subjectEthAmount, supply, event) => {
+    const boughtSold = (await getUserData(subject)).twitterUsername;
     console.log({
         trader: (await getUserData(trader)).twitterUsername,
-        subject: (await getUserData(subject)).twitterUsername,
+        subject: boughtSold,
         isBuy: isBuy ? "Buy" : "Sell",
         shareAmount,
         ethAmount: ethers.formatEther(ethAmount),
@@ -25,6 +26,13 @@ contract.on('Trade', async (trader, subject, isBuy, shareAmount, ethAmount, prot
         subjectEthAmount: ethers.formatEther(subjectEthAmount),
         supply
     });
+
+
+    if(!boughtSold.startsWith('0x')) {
+        const followers = await getTwitterFollowersCount(boughtSold);
+        console.log(`${boughtSold} followers: ${followers}}`);
+    }
+    
 });
 
 async function getUserData(address) {
@@ -39,5 +47,26 @@ async function getUserData(address) {
 
     const data = await response.json();
     return data;
+}
+
+async function getTwitterFollowersCount(profileName) {
+    var myHeaders = new Headers();
+    myHeaders.append("Authorization", `Bearer ${process.env.TWITTER_TOKEN}`);
+
+    var requestOptions = {
+    method: 'GET',
+    headers: myHeaders,
+    redirect: 'follow'
+    };
+
+    const response = await fetch(`https://api.twitter.com/1.1/users/lookup.json?screen_name=${profileName}`, requestOptions);
+
+    if(!response.ok) {
+        console.log(response);
+        throw new Error(`Failed to fetch follow count for ${profileName}: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    return data[0].followers_count;
 }
 
