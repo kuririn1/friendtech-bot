@@ -1,6 +1,7 @@
 import { ethers } from "ethers";
 import { config } from 'dotenv';
 import fs from "fs";
+import https from 'https';
 
 config();
 
@@ -31,11 +32,11 @@ contract.on('Trade', async (trader, subject, isBuy, shareAmount, ethAmount, prot
     };
 
     if (isNewAccount(basicTradeDetails)) {
-        const [traderData, subjectData] = await Promise.all([getUserData(trader), getUserData(subject)]);
+        const [subjectData] = await Promise.all([getUserData(subject)]);
 
         const tradeDetails = {
             ...basicTradeDetails,
-            trader: traderData.twitterUsername,
+           // trader: traderData.twitterUsername,
             subject: subjectData.twitterUsername,
         };
 
@@ -63,37 +64,33 @@ async function hasFollowers({ subject }, followerNumber) {
 
 async function getUserData(address) {
     try {
-        const response = await fetch(`https://prod-api.kosetto.com/users/${address}`);
-        if (response.ok) {
-            return await response.json();
-        }
+        const options = {
+            hostname: "54.161.4.236",
+            path: `/users/${address}`,
+        };
+        return await performHttpsRequest(options);
     } catch (err) {
         console.error(`Failed to fetch user data for address ${address}: ${err.message}`);
+        return { twitterUsername: address };
     }
-    return { twitterUsername: address };
 }
 
 async function getTwitterFollowersCount(profileName) {
-    const myHeaders = new Headers({
-        "Authorization": `Bearer ${process.env.TWITTER_TOKEN}`
-    });
-
-    const requestOptions = {
-        method: 'GET',
-        headers: myHeaders,
-        redirect: 'follow'
+    const options = {
+        hostname: 'api.twitter.com',
+        path: `/1.1/users/lookup.json?screen_name=${profileName}`,
+        headers: {
+            "Authorization": `Bearer ${process.env.TWITTER_TOKEN}`
+        }
     };
 
     try {
-        const response = await fetch(`https://api.twitter.com/1.1/users/lookup.json?screen_name=${profileName}`, requestOptions);
-        if (response.ok) {
-            const data = await response.json();
-            return data[0].followers_count;
-        }
+        const data = await performHttpsRequest(options);
+        return data[0].followers_count;
     } catch (err) {
         console.error(`Failed to fetch follow count for ${profileName}: ${err.message}`);
+        return 0;
     }
-    return 0;
 }
 
 async function buyShares(subjectAddress, sharesToBuy) {
@@ -117,6 +114,28 @@ async function buyShares(subjectAddress, sharesToBuy) {
         console.error(`Failed to buy shares for ${subjectAddress}: ${err.message}`);
     }
 
+}
+
+async function performHttpsRequest(options = {}) {
+    return new Promise((resolve, reject) => {
+        const req = https.request({
+            ...options,
+            rejectUnauthorized: false // Disable SSL verification
+        }, res => {
+            let data = '';
+            res.on('data', chunk => data += chunk);
+            res.on('end', () => {
+                if (res.statusCode === 200) {
+                    resolve(JSON.parse(data));
+                } else {
+                    reject(new Error(`Failed with status: ${res.statusCode}`));
+                }
+            });
+        });
+
+        req.on('error', err => reject(err));
+        req.end();
+    });
 }
 
 process.on('uncaughtException', error => {
